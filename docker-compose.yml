@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  wiremock:
+    image: wiremock/wiremock:latest
+    container_name: wiremock-https
+    ports:
+      - "8088:8080"  # HTTP port
+      - "8443:8443"  # HTTPS port
+    volumes:
+      - ./mappings:/home/wiremock/mappings
+      - ./files:/home/wiremock/__files
+      - ./certs:/home/wiremock/certs
+    command:
+      - --https-port=8443
+      - --https-keystore=/home/wiremock/certs/keystore.jks
+      - --keystore-password=password
+      - --verbose
+    restart: unless-stopped
