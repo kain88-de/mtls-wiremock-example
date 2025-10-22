@@ -15,5 +15,8 @@ services:
       - --https-port=8443
       - --https-keystore=/home/wiremock/certs/keystore.jks
       - --keystore-password=password
+      - --https-require-client-cert
+      - --https-truststore=/home/wiremock/certs/truststore.jks
+      - --truststore-password=trustpass
       - --verbose
     restart: unless-stopped
