@@ -49,6 +49,7 @@ def test_with_client_cert():
     """Test mTLS - connection with valid client certificate should succeed."""
     print("\n🔓 Test 2: mTLS Authentication - Valid client certificate")
     print("   Expected: Connection accepted by server")
+    print("   Note: Client skips server cert verification (self-signed)")
     try:
         ssl_context = create_ssl_context_with_client_cert(verify_server=False)
         
@@ -60,9 +61,28 @@ def test_with_client_cert():
     except Exception as e:
         print(f"   ❌ FAILED: {type(e).__name__}: {e}")
 
+def test_full_mtls_with_server_verification():
+    """Test full mTLS - both client and server verify each other."""
+    print("\n🔐 Test 3: Full mTLS - Mutual certificate verification")
+    print("   Expected: Fails (server cert is self-signed, not signed by our CA)")
+    print("   For production: Sign server cert with same CA as client cert")
+    try:
+        ssl_context = create_ssl_context_with_client_cert(verify_server=True)
+        
+        with httpx.Client(verify=ssl_context) as client:
+            response = client.get(f"{WIREMOCK_URL}/__admin/health", timeout=5)
+            print(f"   ✅ SUCCESS: Full mutual TLS working!")
+            print(f"   Both client and server certificates verified")
+    except Exception as e:
+        if "certificate verify failed" in str(e).lower():
+            print(f"   ⚠️  Expected failure: Client rejected server's certificate")
+            print(f"   Reason: Server cert not signed by trusted CA")
+        else:
+            print(f"   ❌ FAILED: {type(e).__name__}: {str(e)[:100]}")
+
 def test_api_call_with_mtls():
     """Test API functionality with mTLS."""
-    print("\n📡 Test 3: API Call with mTLS - Stub endpoint")
+    print("\n📡 Test 4: API Call with mTLS - Stub endpoint")
     print("   Expected: API call succeeds with client certificate")
     try:
         ssl_context = create_ssl_context_with_client_cert(verify_server=False)
@@ -80,7 +100,7 @@ def test_api_call_with_mtls():
 
 def test_with_curl_example():
     """Show curl command examples."""
-    print("\n💡 Test 4: Curl Examples")
+    print("\n💡 Test 5: Curl Examples")
     print("   With client cert (should work):")
     print("   $ curl -k --cert certs/client-cert.pem --key certs/client-key.pem \\")
     print("       https://localhost:8443/hello")
@@ -100,11 +120,13 @@ if __name__ == "__main__":
     
     test_without_client_cert()
     test_with_client_cert()
+    test_full_mtls_with_server_verification()
     test_api_call_with_mtls()
     test_with_curl_example()
     
     print("\n" + "=" * 70)
-    print("Summary: mTLS is properly configured!")
-    print("- Server REQUIRES client certificates")
-    print("- Client certificates must be signed by trusted CA")
+    print("Summary:")
+    print("✅ Server REQUIRES and validates client certificates (mTLS enforced)")
+    print("⚠️  Client skips server validation (using -k / verify=False)")
+    print("💡 For full mTLS: Sign server cert with same CA as client cert")
     print("=" * 70)
