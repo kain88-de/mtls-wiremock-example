@@ -196,9 +196,51 @@ def test_full_mtls_with_server_verification():
         else:
             print(f"   ❌ FAILED: {type(e).__name__}: {str(e)[:100]}")
 
+def test_client_rejects_bad_server_cert():
+    """Test client rejecting server with wrong/untrusted certificate."""
+    print("\n🚫 Test 5: Client Rejects Invalid Server Certificate")
+    print("   Expected: Client rejects server with untrusted certificate")
+    print("   Note: We'll use a different CA to verify server cert")
+    try:
+        import tempfile
+        import os
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a different CA (not the one that signed the server cert)
+            wrong_ca_key = os.path.join(tmpdir, "wrong-ca-key.pem")
+            wrong_ca_cert = os.path.join(tmpdir, "wrong-ca-cert.pem")
+            
+            # Generate different CA
+            os.system(f"openssl genrsa -out {wrong_ca_key} 2048 2>/dev/null")
+            os.system(f"openssl req -new -x509 -days 1 -key {wrong_ca_key} "
+                     f"-out {wrong_ca_cert} -subj '/CN=WrongCA' 2>/dev/null")
+            
+            # Try to verify server cert with wrong CA
+            ssl_context = ssl.create_default_context(cafile=wrong_ca_cert)
+            ssl_context.load_cert_chain(certfile=CLIENT_CERT, keyfile=CLIENT_KEY)
+            
+            with httpx.Client(verify=ssl_context) as client:
+                response = client.get(f"{WIREMOCK_URL}/__admin/health", timeout=5)
+                print(f"   ❌ FAILED: Client accepted untrusted server certificate!")
+                print(f"   Status: {response.status_code}")
+    except httpx.ConnectError as e:
+        error_msg = str(e).lower()
+        if "certificate verify failed" in error_msg or "unable to get local issuer" in error_msg:
+            print(f"   ✅ SUCCESS: Client rejected server's certificate")
+            print(f"   Reason: Server cert not signed by trusted CA")
+        else:
+            print(f"   ⚠️  Failed with: {e}")
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "certificate verify failed" in error_msg:
+            print(f"   ✅ SUCCESS: Client rejected server's certificate")
+            print(f"   Reason: Server cert not signed by trusted CA")
+        else:
+            print(f"   ⚠️  Failed with {type(e).__name__}: {str(e)[:100]}")
+
 def test_api_call_with_mtls():
     """Test API functionality with mTLS."""
-    print("\n📡 Test 5: API Call with mTLS - Stub endpoint")
+    print("\n📡 Test 6: API Call with mTLS - Stub endpoint")
     print("   Expected: API call succeeds with client certificate")
     try:
         ssl_context = create_ssl_context_with_client_cert(verify_server=False)
@@ -216,7 +258,7 @@ def test_api_call_with_mtls():
 
 def test_with_curl_example():
     """Show curl command examples."""
-    print("\n💡 Test 6: Curl Examples")
+    print("\n💡 Test 7: Curl Examples")
     print("   Full mTLS with CA verification:")
     print("   $ curl --cacert certs/ca-cert.pem --cert certs/client-cert.pem \\")
     print("       --key certs/client-key.pem https://localhost:8443/hello")
@@ -242,6 +284,7 @@ if __name__ == "__main__":
     test_with_client_cert()
     test_with_wrong_client_cert()
     test_full_mtls_with_server_verification()
+    test_client_rejects_bad_server_cert()
     test_api_call_with_mtls()
     test_with_curl_example()
     
@@ -251,5 +294,6 @@ if __name__ == "__main__":
     print("✓ Server validates client certificates (signed by CA)")
     print("✓ Server rejects untrusted client certificates")
     print("✓ Client validates server certificates (signed by CA)")
+    print("✓ Client rejects untrusted server certificates")
     print("✓ Both sides use the same Certificate Authority")
     print("=" * 70)
