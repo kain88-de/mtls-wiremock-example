@@ -1,13 +1,15 @@
-# WireMock with HTTPS and mTLS
+# WireMock with Full Mutual TLS (mTLS)
 
-This setup runs WireMock with HTTPS and mutual TLS (mTLS) authentication enabled.
+This setup runs WireMock with **full mutual TLS authentication** where both client and server verify each other's certificates using a shared Certificate Authority.
 
 ## Features
 
 - ✅ HTTPS support on port 8443
 - ✅ HTTP support on port 8088
-- ✅ Mutual TLS (client certificate authentication)
-- ✅ Python test script with httpx
+- ✅ **Full mutual TLS (mTLS)** - both sides verify certificates
+- ✅ Single CA signs both client and server certificates
+- ✅ Python test script with httpx demonstrating full mTLS
+- ✅ Proper certificate chain validation
 
 ## Quick Start
 
@@ -73,12 +75,22 @@ keytool -importcert -file ca-cert.pem -alias ca -keystore truststore.jks \
 
 ### Without Client Certificate (will fail)
 ```bash
-curl -k https://localhost:8443/__admin/health
+curl --cacert certs/ca-cert.pem https://localhost:8443/__admin/health
 # Error: sslv3 alert bad certificate
 ```
 
-### With Client Certificate (will succeed)
+### With Client Certificate - Full mTLS (will succeed)
 ```bash
+# Full mutual TLS with CA verification
+curl --cacert certs/ca-cert.pem \
+     --cert certs/client-cert.pem \
+     --key certs/client-key.pem \
+     https://localhost:8443/__admin/health
+```
+
+### Skip Server Verification (not recommended)
+```bash
+# Works but doesn't verify server certificate
 curl -k --cert certs/client-cert.pem --key certs/client-key.pem \
   https://localhost:8443/__admin/health
 ```
@@ -89,9 +101,10 @@ python3 test_mtls.py
 ```
 
 The test script demonstrates:
-1. ❌ Connection fails without client certificate
-2. ✅ Connection succeeds with valid client certificate
-3. ✅ API calls work with mTLS enabled
+1. ❌ Connection fails without client certificate (mTLS enforced)
+2. ✅ Connection succeeds with client cert (server verification skipped)
+3. ✅ **Full mutual TLS** - both sides verify each other's certificates
+4. ✅ API calls work with mTLS enabled
 
 ## Directory Structure
 
@@ -126,15 +139,25 @@ Create `mappings/hello.json`:
 
 Test with:
 ```bash
-curl -k --cert certs/client-cert.pem --key certs/client-key.pem \
-  https://localhost:8443/hello
+# Full mTLS with CA verification
+curl --cacert certs/ca-cert.pem \
+     --cert certs/client-cert.pem \
+     --key certs/client-key.pem \
+     https://localhost:8443/hello
 ```
 
-## How mTLS Works
+## How Full mTLS Works
 
-1. **Server Authentication**: WireMock presents its certificate from `keystore.jks`
-2. **Client Authentication**: Client must present a certificate signed by the CA in `truststore.jks`
-3. **Mutual Trust**: Both parties verify each other's certificates before establishing the connection
+1. **Certificate Authority (CA)**: A trusted CA signs both server and client certificates
+2. **Server Authentication**: 
+   - WireMock presents its certificate (signed by CA) from `keystore.jks`
+   - Client verifies server certificate against CA in `ca-cert.pem`
+3. **Client Authentication**: 
+   - Client presents its certificate (signed by CA)
+   - WireMock verifies client certificate against CA in `truststore.jks`
+4. **Mutual Trust**: Both parties verify each other's certificates using the shared CA before establishing the connection
+
+This is **true mutual TLS** - both endpoints authenticate each other.
 
 ## Configuration
 

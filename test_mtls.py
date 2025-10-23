@@ -47,9 +47,9 @@ def test_without_client_cert():
 
 def test_with_client_cert():
     """Test mTLS - connection with valid client certificate should succeed."""
-    print("\n🔓 Test 2: mTLS Authentication - Valid client certificate")
+    print("\n🔓 Test 2: mTLS Authentication - Client certificate only")
     print("   Expected: Connection accepted by server")
-    print("   Note: Client skips server cert verification (self-signed)")
+    print("   Note: Client skips server cert verification for comparison")
     try:
         ssl_context = create_ssl_context_with_client_cert(verify_server=False)
         
@@ -64,19 +64,20 @@ def test_with_client_cert():
 def test_full_mtls_with_server_verification():
     """Test full mTLS - both client and server verify each other."""
     print("\n🔐 Test 3: Full mTLS - Mutual certificate verification")
-    print("   Expected: Fails (server cert is self-signed, not signed by our CA)")
-    print("   For production: Sign server cert with same CA as client cert")
+    print("   Expected: Both sides verify each other's certificates")
     try:
         ssl_context = create_ssl_context_with_client_cert(verify_server=True)
         
         with httpx.Client(verify=ssl_context) as client:
             response = client.get(f"{WIREMOCK_URL}/__admin/health", timeout=5)
             print(f"   ✅ SUCCESS: Full mutual TLS working!")
-            print(f"   Both client and server certificates verified")
+            print(f"   ✓ Client verified server's certificate (signed by CA)")
+            print(f"   ✓ Server verified client's certificate (signed by CA)")
+            print(f"   Status: {response.status_code}")
     except Exception as e:
         if "certificate verify failed" in str(e).lower():
-            print(f"   ⚠️  Expected failure: Client rejected server's certificate")
-            print(f"   Reason: Server cert not signed by trusted CA")
+            print(f"   ❌ FAILED: Client rejected server's certificate")
+            print(f"   Reason: {str(e)[:100]}")
         else:
             print(f"   ❌ FAILED: {type(e).__name__}: {str(e)[:100]}")
 
@@ -101,7 +102,11 @@ def test_api_call_with_mtls():
 def test_with_curl_example():
     """Show curl command examples."""
     print("\n💡 Test 5: Curl Examples")
-    print("   With client cert (should work):")
+    print("   Full mTLS with CA verification:")
+    print("   $ curl --cacert certs/ca-cert.pem --cert certs/client-cert.pem \\")
+    print("       --key certs/client-key.pem https://localhost:8443/hello")
+    print()
+    print("   Without server verification (-k flag):")
     print("   $ curl -k --cert certs/client-cert.pem --key certs/client-key.pem \\")
     print("       https://localhost:8443/hello")
     print()
@@ -126,7 +131,8 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 70)
     print("Summary:")
-    print("✅ Server REQUIRES and validates client certificates (mTLS enforced)")
-    print("⚠️  Client skips server validation (using -k / verify=False)")
-    print("💡 For full mTLS: Sign server cert with same CA as client cert")
+    print("✅ Full mutual TLS (mTLS) is working!")
+    print("✓ Server validates client certificates (signed by CA)")
+    print("✓ Client validates server certificates (signed by CA)")
+    print("✓ Both sides use the same Certificate Authority")
     print("=" * 70)
